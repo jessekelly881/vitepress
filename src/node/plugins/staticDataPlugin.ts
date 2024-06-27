@@ -8,7 +8,7 @@ import path, { dirname, resolve } from 'path'
 import { isMatch } from 'micromatch'
 import glob from 'fast-glob'
 
-const loaderMatch = /\.data\.(j|t)s$/
+const loaderMatch = /\.data\.m?(j|t)s($|\?)/
 
 let server: ViteDevServer
 
@@ -71,7 +71,7 @@ export const staticDataPlugin: Plugin = {
       } else {
         // use vite's load config util as a away to load Node.js file with
         // TS & native ESM support
-        const res = await loadConfigFromFile({} as any, id)
+        const res = await loadConfigFromFile({} as any, id.replace(/\?.*$/, ''))
 
         // record deps for hmr
         if (server && res) {
@@ -125,9 +125,18 @@ export const staticDataPlugin: Plugin = {
       // register this module as a glob importer
       const { watch } = idToLoaderModulesMap[id]!
       if (watch) {
-        ;(server as any)._importGlobMap.set(id, [
-          Array.isArray(watch) ? watch : [watch]
-        ])
+        ;(server as any)._importGlobMap.set(
+          id,
+          [Array.isArray(watch) ? watch : [watch]].map((globs) => {
+            const affirmed: string[] = []
+            const negated: string[] = []
+
+            for (const glob of globs) {
+              ;(glob[0] === '!' ? negated : affirmed).push(glob)
+            }
+            return { affirmed, negated }
+          })
+        )
       }
     }
     return null

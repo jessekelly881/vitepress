@@ -38,6 +38,10 @@ interface VitePressData<T = any> {
   isDark: Ref<boolean>
   dir: Ref<string>
   localeIndex: Ref<string>
+  /**
+   * Current location hash
+   */
+  hash: Ref<string>
 }
 
 interface PageData {
@@ -45,6 +49,7 @@ interface PageData {
   titleTemplate?: string | boolean
   description: string
   relativePath: string
+  filePath: string,
   headers: Header[]
   frontmatter: Record<string, any>
   params?: Record<string, any>
@@ -85,8 +90,27 @@ Returns the VitePress router instance so you can programmatically navigate to an
 
 ```ts
 interface Router {
+  /**
+   * Current route.
+   */
   route: Route
-  go: (href?: string) => Promise<void>
+  /**
+   * Navigate to a new URL.
+   */
+  go: (to?: string) => Promise<void>
+  /**
+   * Called before the route changes. Return `false` to cancel the navigation.
+   */
+  onBeforeRouteChange?: (to: string) => Awaitable<void | boolean>
+  /**
+   * Called before the page component is loaded (after the history state is
+   * updated). Return `false` to cancel the navigation.
+   */
+  onBeforePageLoad?: (to: string) => Awaitable<void | boolean>
+  /**
+   * Called after the route changes.
+   */
+  onAfterRouteChanged?: (to: string) => Awaitable<void>
 }
 ```
 
@@ -94,11 +118,11 @@ interface Router {
 
 - **Type**: `(path: string) => string`
 
-Appends the configured [`base`](/reference/site-config#base) to a given URL path. Also see [Base URL](/guide/asset-handling#base-url).
+Appends the configured [`base`](./site-config#base) to a given URL path. Also see [Base URL](../guide/asset-handling#base-url).
 
 ## `<Content />` <Badge type="info" text="component" />
 
-The `<Content />` component displays the rendered markdown contents. Useful [when creating your own theme](/guide/custom-theme).
+The `<Content />` component displays the rendered markdown contents. Useful [when creating your own theme](../guide/custom-theme).
 
 ```vue
 <template>
@@ -121,9 +145,11 @@ If you are using or demoing components that are not SSR-friendly (for example, c
 </ClientOnly>
 ```
 
+- Related: [SSR Compatibility](../guide/ssr-compat)
+
 ## `$frontmatter` <Badge type="info" text="template global" />
 
-Directly access current page's [frontmatter](/guide/frontmatter) data in Vue expressions.
+Directly access current page's [frontmatter](../guide/frontmatter) data in Vue expressions.
 
 ```md
 ---
@@ -135,7 +161,7 @@ title: Hello
 
 ## `$params` <Badge type="info" text="template global" />
 
-Directly access current page's [dynamic route params](/guide/routing#dynamic-routes) in Vue expressions.
+Directly access current page's [dynamic route params](../guide/routing#dynamic-routes) in Vue expressions.
 
 ```md
 - package name: {{ $params.pkg }}

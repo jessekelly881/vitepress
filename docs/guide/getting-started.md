@@ -8,7 +8,7 @@ You can try VitePress directly in your browser on [StackBlitz](https://vitepress
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) version 16 or higher.
+- [Node.js](https://nodejs.org/) version 18 or higher.
 - Terminal for accessing VitePress via its command line interface (CLI).
 - Text Editor with [Markdown](https://en.wikipedia.org/wiki/Markdown) syntax support.
   - [VSCode](https://code.visualstudio.com/) is recommended, along with the [official Vue extension](https://marketplace.visualstudio.com/items?itemName=Vue.volar).
@@ -18,7 +18,7 @@ VitePress can be used on its own, or be installed into an existing project. In b
 ::: code-group
 
 ```sh [npm]
-$ npm install -D vitepress
+$ npm add -D vitepress
 ```
 
 ```sh [pnpm]
@@ -27,6 +27,14 @@ $ pnpm add -D vitepress
 
 ```sh [yarn]
 $ yarn add -D vitepress
+```
+
+```sh [yarn (pnp)]
+$ yarn add -D vitepress vue
+```
+
+```sh [bun]
+$ bun add -D vitepress
 ```
 
 :::
@@ -38,11 +46,18 @@ If using PNPM, you will notice a missing peer warning for `@docsearch/js`. This 
 "pnpm": {
   "peerDependencyRules": {
     "ignoreMissing": [
-      "@algolia/client-search"
+      "@algolia/client-search",
+      "search-insights"
     ]
   }
 }
 ```
+
+:::
+
+::: tip NOTE
+
+VitePress is an ESM-only package. Don't use `require()` to import it, and make sure your nearest `package.json` contains `"type": "module"`, or change the file extension of your relevant files like `.vitepress/config.js` to `.mjs`/`.mts`. Refer to [Vite's troubleshooting guide](http://vitejs.dev/guide/troubleshooting.html#this-package-is-esm-only) for more details. Also, inside async CJS contexts, you can use `await import('vitepress')` instead.
 
 :::
 
@@ -57,19 +72,25 @@ $ npx vitepress init
 ```
 
 ```sh [pnpm]
-$ pnpm exec vitepress init
+$ pnpm vitepress init
+```
+
+```sh [yarn]
+$ yarn vitepress init
+```
+
+```sh [bun]
+$ bun vitepress init
 ```
 
 :::
 
 You will be greeted with a few simple questions:
 
-<p>
-  <img src="./vitepress-init.png" alt="vitepress init screenshot" style="border-radius:8px">
-</p>
+<<< @/snippets/init.ansi
 
-:::tip Vue as Peer Dependency
-If you intend to perform customization that uses Vue components or APIs, you should also explicitly install `vue` as a peer dependency.
+::: tip Vue as Peer Dependency
+If you intend to perform customization that uses Vue components or APIs, you should also explicitly install `vue` as a dependency.
 :::
 
 ## File Structure
@@ -91,8 +112,8 @@ Assuming you chose to scaffold the VitePress project in `./docs`, the generated 
 
 The `docs` directory is considered the **project root** of the VitePress site. The `.vitepress` directory is a reserved location for VitePress' config file, dev server cache, build output, and optional theme customization code.
 
-:::tip
-By default, VitePress stores its dev server cache in `.vitepress/cache`, and the production build output in `.vitepress/dist`. If using Git, you should add them to your `.gitignore` file. These locations can also be [configured](/reference/site-config#outdir).
+::: tip
+By default, VitePress stores its dev server cache in `.vitepress/cache`, and the production build output in `.vitepress/dist`. If using Git, you should add them to your `.gitignore` file. These locations can also be [configured](../reference/site-config#outdir).
 :::
 
 ### The Config File
@@ -112,7 +133,7 @@ export default {
 }
 ```
 
-You can also configure the behavior of the theme via the `themeConfig` option. Consult the [Config Reference](/reference/site-config) for full details on all config options.
+You can also configure the behavior of the theme via the `themeConfig` option. Consult the [Config Reference](../reference/site-config) for full details on all config options.
 
 ### Source Files
 
@@ -154,6 +175,10 @@ $ pnpm run docs:dev
 $ yarn docs:dev
 ```
 
+```sh [bun]
+$ bun run docs:dev
+```
+
 :::
 
 Instead of npm scripts, you can also invoke VitePress directly with:
@@ -165,22 +190,30 @@ $ npx vitepress dev docs
 ```
 
 ```sh [pnpm]
-$ pnpm exec vitepress dev docs
+$ pnpm vitepress dev docs
+```
+
+```sh [yarn]
+$ yarn vitepress dev docs
+```
+
+```sh [bun]
+$ bun vitepress dev docs
 ```
 
 :::
 
-More command line usage is documented in the [CLI Reference](/reference/cli).
+More command line usage is documented in the [CLI Reference](../reference/cli).
 
 The dev server should be running at `http://localhost:5173`. Visit the URL in your browser to see your new site in action!
 
 ## What's Next?
 
-- To better understand how markdown files are mapped to generated HTML, proceed to the [Routing Guide](./routing.md).
+- To better understand how markdown files are mapped to generated HTML, proceed to the [Routing Guide](./routing).
 
-- To discover more about what you can do on the page, such as writing markdown content or using Vue Component, refer to the "Writing" section of the guide. A great place to start would be to learn about [Markdown Extensions](/guide/markdown).
+- To discover more about what you can do on the page, such as writing markdown content or using Vue Components, refer to the "Writing" section of the guide. A great place to start would be to learn about [Markdown Extensions](./markdown).
 
-- To explore the features provided by the default documentation theme, check out the [Default Theme Config Reference](/reference/default-theme-config).
+- To explore the features provided by the default documentation theme, check out the [Default Theme Config Reference](../reference/default-theme-config).
 
 - If you want to further customize the appearance of your site, explore how to either [Extend the Default Theme](./extending-default-theme) or [Build a Custom Theme](./custom-theme).
 

@@ -36,4 +36,18 @@ export default {
 }
 ```
 
-Note that footer will not be displayed when the [SideBar](/reference/default-theme-sidebar) is visible.
+::: warning
+Only inline elements can be used in `message` and `copyright` as they are rendered inside a `<p>` element. If you want to add block elements, consider using [`layout-bottom`](../guide/extending-default-theme#layout-slots) slot instead.
+:::
+
+Note that footer will not be displayed when the [SideBar](./default-theme-sidebar) is visible.
+
+## Frontmatter Config
+
+This can be disabled per-page using the `footer` option on frontmatter:
+
+```yaml
+---
+footer: false
+---
+```

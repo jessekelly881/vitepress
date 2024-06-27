@@ -1,15 +1,64 @@
 import {
   loadConfigFromFile,
   normalizePath,
+  type Logger,
   type Plugin,
   type ViteDevServer
 } from 'vite'
 import fs from 'fs-extra'
 import c from 'picocolors'
 import path from 'path'
-import { resolvePages, type SiteConfig } from '../config'
+import glob from 'fast-glob'
+import { type SiteConfig, type UserConfig } from '../siteConfig'
+import { resolveRewrites } from './rewritesPlugin'
 
 export const dynamicRouteRE = /\[(\w+?)\]/g
+
+export async function resolvePages(
+  srcDir: string,
+  userConfig: UserConfig,
+  logger: Logger
+) {
+  // Important: fast-glob doesn't guarantee order of the returned files.
+  // We must sort the pages so the input list to rollup is stable across
+  // builds - otherwise different input order could result in different exports
+  // order in shared chunks which in turns invalidates the hash of every chunk!
+  // JavaScript built-in sort() is mandated to be stable as of ES2019 and
+  // supported in Node 12+, which is required by Vite.
+  const allMarkdownFiles = (
+    await glob(['**.md'], {
+      cwd: srcDir,
+      ignore: [
+        '**/node_modules/**',
+        '**/dist/**',
+        ...(userConfig.srcExclude || [])
+      ]
+    })
+  ).sort()
+
+  const pages: string[] = []
+  const dynamicRouteFiles: string[] = []
+
+  allMarkdownFiles.forEach((file) => {
+    dynamicRouteRE.lastIndex = 0
+    ;(dynamicRouteRE.test(file) ? dynamicRouteFiles : pages).push(file)
+  })
+
+  const dynamicRoutes = await resolveDynamicRoutes(
+    srcDir,
+    dynamicRouteFiles,
+    logger
+  )
+  pages.push(...dynamicRoutes.routes.map((r) => r.path))
+
+  const rewrites = resolveRewrites(pages, userConfig.rewrites)
+
+  return {
+    pages,
+    dynamicRoutes,
+    rewrites
+  }
+}
 
 interface UserRouteConfig {
   params: Record<string, string>
@@ -79,7 +128,7 @@ export const dynamicRoutesPlugin = async (
 
         // inject raw content
         // this is intended for integration with CMS
-        // we use a speical injection syntax so the content is rendered as
+        // we use a special injection syntax so the content is rendered as
         // static local content instead of included as runtime data.
         if (content) {
           baseContent = baseContent.replace(/<!--\s*@content\s*-->/, content)
@@ -101,7 +150,7 @@ export const dynamicRoutesPlugin = async (
         if (!/\.md$/.test(ctx.file)) {
           Object.assign(
             config,
-            await resolvePages(config.srcDir, config.userConfig)
+            await resolvePages(config.srcDir, config.userConfig, config.logger)
           )
         }
         for (const id of mods) {
@@ -114,7 +163,8 @@ export const dynamicRoutesPlugin = async (
 
 export async function resolveDynamicRoutes(
   srcDir: string,
-  routes: string[]
+  routes: string[],
+  logger: Logger
 ): Promise<SiteConfig['dynamicRoutes']> {
   const pendingResolveRoutes: Promise<ResolvedRouteConfig[]>[] = []
   const routeFileToModulesMap: Record<string, Set<string>> = {}
@@ -122,33 +172,37 @@ export async function resolveDynamicRoutes(
   for (const route of routes) {
     // locate corresponding route paths file
     const fullPath = normalizePath(path.resolve(srcDir, route))
-    const jsPathsFile = fullPath.replace(/\.md$/, '.paths.js')
-    let pathsFile = jsPathsFile
-    if (!fs.existsSync(jsPathsFile)) {
-      pathsFile = fullPath.replace(/\.md$/, '.paths.ts')
-      if (!fs.existsSync(pathsFile)) {
-        console.warn(
-          c.yellow(
-            `Missing paths file for dynamic route ${route}: ` +
-              `a corresponding ${jsPathsFile} or ${pathsFile} is needed.`
-          )
+
+    const paths = ['js', 'ts', 'mjs', 'mts'].map((ext) =>
+      fullPath.replace(/\.md$/, `.paths.${ext}`)
+    )
+
+    const pathsFile = paths.find((p) => fs.existsSync(p))
+
+    if (pathsFile == null) {
+      logger.warn(
+        c.yellow(
+          `Missing paths file for dynamic route ${route}: ` +
+            `a corresponding ${paths[0]} (or .ts/.mjs/.mts) file is needed.`
         )
-        continue
-      }
+      )
+      continue
     }
 
     // load the paths loader module
     let mod = routeModuleCache.get(pathsFile)
     if (!mod) {
       try {
-        mod = (await loadConfigFromFile({} as any, pathsFile)) as RouteModule
+        mod = (await loadConfigFromFile(
+          {} as any,
+          pathsFile,
+          undefined,
+          'silent'
+        )) as RouteModule
         routeModuleCache.set(pathsFile, mod)
-      } catch (e) {
-        console.warn(
-          c.yellow(
-            `Invalid paths file export in ${pathsFile}. ` +
-              `Expects default export of an object with a "paths" property.`
-          )
+      } catch (err: any) {
+        logger.warn(
+          `${c.yellow(`Failed to load ${pathsFile}:`)}\n${err.message}\n${err.stack}`
         )
         continue
       }
@@ -168,7 +222,7 @@ export async function resolveDynamicRoutes(
 
     const loader = mod!.config.paths
     if (!loader) {
-      console.warn(
+      logger.warn(
         c.yellow(
           `Invalid paths file export in ${pathsFile}. ` +
             `Missing "paths" property from default export.`

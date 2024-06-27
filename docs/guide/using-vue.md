@@ -4,6 +4,10 @@ In VitePress, each Markdown file is compiled into HTML and then processed as a [
 
 It's worth noting that VitePress leverages Vue's compiler to automatically detect and optimize the purely static parts of the Markdown content. Static contents are optimized into single placeholder nodes and eliminated from the page's JavaScript payload for initial visits. They are also skipped during client-side hydration. In short, you only pay for the dynamic parts on any given page.
 
+::: tip SSR Compatibility
+All Vue usage needs to be SSR-compatible. See [SSR Compatibility](./ssr-compat) for details and common workarounds.
+:::
+
 ## Templating
 
 ### Interpolation
@@ -63,11 +67,11 @@ The count is: {{ count }}
 </style>
 ```
 
-:::warning Avoid `<style scoped>` in Markdown
+::: warning Avoid `<style scoped>` in Markdown
 When used in Markdown, `<style scoped>` requires adding special attributes to every element on the current page, which will significantly bloat the page size. `<style module>` is preferred when locally-scoped styling is needed in a page.
 :::
 
-You also have access to VitePress' runtime APIs such as the [`useData` helper](/reference/runtime-api#usedata), which provides access to current page's metadata:
+You also have access to VitePress' runtime APIs such as the [`useData` helper](../reference/runtime-api#usedata), which provides access to current page's metadata:
 
 **Input**
 
@@ -118,7 +122,7 @@ This is a .md using a custom component
 
 ### Registering Components Globally
 
-If a component is going to be used on most of the pages, they can be registered globally by customizing the Vue app instance. See relevant section in [Extending Default Theme](/guide/extending-default-theme#registering-global-components) for an example.
+If a component is going to be used on most of the pages, they can be registered globally by customizing the Vue app instance. See relevant section in [Extending Default Theme](./extending-default-theme#registering-global-components) for an example.
 
 ::: warning IMPORTANT
 Make sure a custom component's name either contains a hyphen or is in PascalCase. Otherwise, it will be treated as an inline element and wrapped inside a `<p>` tag, which will lead to hydration mismatch because `<p>` does not allow block elements to be placed inside it.
@@ -160,7 +164,7 @@ Alternatively, you can wrap the entire paragraph in a `v-pre` custom container:
 
 ```md
 ::: v-pre
-{{ This will be displayed as-is }}`
+{{ This will be displayed as-is }}
 :::
 ```
 
@@ -176,7 +180,7 @@ Alternatively, you can wrap the entire paragraph in a `v-pre` custom container:
 
 ## Unescape in Code Blocks
 
-By default, all fenced code blocks are automatically wrapped with `v-pre`, so no Vue syntax will be processd inside. To enable Vue-style interpolation inside fences, you can append the language with the `-vue` suffix, e.g. `js-vue`:
+By default, all fenced code blocks are automatically wrapped with `v-pre`, so no Vue syntax will be processed inside. To enable Vue-style interpolation inside fences, you can append the language with the `-vue` suffix, e.g. `js-vue`:
 
 **Input**
 
@@ -191,6 +195,8 @@ Hello {{ 1 + 1 }}
 ```js-vue
 Hello {{ 1 + 1 }}
 ```
+
+Note that this might prevent certain tokens from being syntax highlighted properly.
 
 ## Using CSS Pre-processors
 
@@ -216,66 +222,9 @@ Then you can use the following in Markdown and theme components:
 </style>
 ```
 
-## Browser API Access Restrictions
-
-Because VitePress applications are server-rendered in Node.js when generating static builds, any Vue usage must conform to the [universal code requirements](https://vuejs.org/guide/scaling-up/ssr.html). In short, make sure to only access Browser / DOM APIs in `beforeMount` or `mounted` hooks.
-
-If you are using or demoing components that are not SSR-friendly (for example, contain custom directives), you can wrap them inside the built-in `<ClientOnly>` component:
-
-```md
-<ClientOnly>
-  <NonSSRFriendlyComponent />
-</ClientOnly>
-```
-
-Note this does not fix components or libraries that access Browser APIs **on import**. To use code that assumes a browser environment on import, you need to dynamically import them in proper lifecycle hooks:
-
-```vue
-<script>
-export default {
-  mounted() {
-    import('./lib-that-access-window-on-import').then((module) => {
-      // use code
-    })
-  }
-}
-</script>
-```
-
-If your module `export default` a Vue component, you can register it dynamically:
-
-```vue
-<template>
-  <component
-    v-if="dynamicComponent"
-    :is="dynamicComponent">
-  </component>
-</template>
-
-<script>
-export default {
-  data() {
-    return {
-      dynamicComponent: null
-    }
-  },
-
-  mounted() {
-    import('./lib-that-access-window-on-import').then((module) => {
-      this.dynamicComponent = module.default
-    })
-  }
-}
-</script>
-```
-
-**Also see:**
-
-- [Vue.js > Dynamic Components](https://vuejs.org/guide/essentials/component-basics.html#dynamic-components)
-
 ## Using Teleports
 
-Vitepress currently has SSG support for teleports to body only. For other targets, you can wrap them inside the built-in `<ClientOnly>` component or inject the teleport markup into the correct location in your final page HTML through [`postRender` hook](/reference/site-config#postrender).
+VitePress currently has SSG support for teleports to body only. For other targets, you can wrap them inside the built-in `<ClientOnly>` component or inject the teleport markup into the correct location in your final page HTML through [`postRender` hook](../reference/site-config#postrender).
 
 <ModalDemo />
 
@@ -295,6 +244,7 @@ Vitepress currently has SSG support for teleports to body only. For other target
 
 <script setup>
 import ModalDemo from '../components/ModalDemo.vue'
+import ComponentInHeader from '../components/ComponentInHeader.vue'
 </script>
 
 <style>

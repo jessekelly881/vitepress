@@ -22,11 +22,11 @@ const sidebar: DefaultTheme.Config['sidebar'] = {
       ]
     },
     {
-      text: 'Static Data',
+      text: 'Data Loading',
       items: [
         {
           text: 'Test Page',
-          link: '/static-data/data'
+          link: '/data-loading/data'
         }
       ]
     },
@@ -86,7 +86,23 @@ const sidebar: DefaultTheme.Config['sidebar'] = {
 export default defineConfig({
   title: 'Example',
   description: 'An example app using VitePress.',
+  markdown: {
+    image: {
+      lazyLoading: true
+    }
+  },
   themeConfig: {
-    sidebar
+    sidebar,
+    search: {
+      provider: 'local',
+      options: {
+        _render(src, env, md) {
+          const html = md.render(src, env)
+          if (env.frontmatter?.search === false) return ''
+          if (env.relativePath.startsWith('local-search/excluded')) return ''
+          return html
+        }
+      }
+    }
   }
 })

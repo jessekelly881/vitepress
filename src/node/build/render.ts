@@ -1,32 +1,35 @@
-import escape from 'escape-html'
+import { isBooleanAttr } from '@vue/shared'
 import fs from 'fs-extra'
 import path from 'path'
-import type { OutputAsset, OutputChunk, RollupOutput } from 'rollup'
 import { pathToFileURL } from 'url'
-import { normalizePath, transformWithEsbuild } from 'vite'
+import { normalizePath, transformWithEsbuild, type Rollup } from 'vite'
+import { version } from '../../../package.json'
 import type { SiteConfig } from '../config'
 import {
-  createTitle,
   EXTERNAL_URL_RE,
+  createTitle,
+  escapeHtml,
   mergeHead,
   notFoundPageData,
   resolveSiteDataByRoute,
   sanitizeFileName,
+  slash,
   type HeadConfig,
   type PageData,
   type SSGContext
 } from '../shared'
-import { slash } from '../utils/slash'
 
 export async function renderPage(
   render: (path: string) => Promise<SSGContext>,
   config: SiteConfig,
   page: string, // foo.md
-  result: RollupOutput | null,
-  appChunk: OutputChunk | undefined,
-  cssChunk: OutputAsset | undefined,
+  result: Rollup.RollupOutput | null,
+  appChunk: Rollup.OutputChunk | null,
+  cssChunk: Rollup.OutputAsset | null,
+  assets: string[],
   pageToHashMap: Record<string, string>,
-  hashMapString: string
+  metadataScript: { html: string; inHead: boolean },
+  additionalHeadTags: HeadConfig[]
 ) {
   const routePath = `/${page.replace(/\.md$/, '')}`
   const siteData = resolveSiteDataByRoute(config.site, routePath)
@@ -41,7 +44,7 @@ export async function renderPage(
   // for any initial page load, we only need the lean version of the page js
   // since the static content is already on the page!
   const pageHash = pageToHashMap[pageName.toLowerCase()]
-  const pageClientJsFileName = `assets/${pageName}.${pageHash}.lean.js`
+  const pageClientJsFileName = `${config.assetsDir}/${pageName}.${pageHash}.lean.js`
 
   let pageData: PageData
   let hasCustom404 = true
@@ -49,7 +52,11 @@ export async function renderPage(
   try {
     // resolve page data so we can render head tags
     const { __pageData } = await import(
-      pathToFileURL(path.join(config.tempDir, pageServerJsFileName)).toString()
+      pathToFileURL(
+        path.join(config.tempDir, pageServerJsFileName)
+      ).toString() +
+        '?t=' +
+        Date.now()
     )
     pageData = __pageData
   } catch (e) {
@@ -61,23 +68,26 @@ export async function renderPage(
     }
   }
 
+  const title: string = createTitle(siteData, pageData)
+  const description: string = pageData.description || siteData.description
+  const stylesheetLink = cssChunk
+    ? `<link rel="preload stylesheet" href="${siteData.base}${cssChunk.fileName}" as="style">`
+    : ''
+
   let preloadLinks =
     config.mpa || (!hasCustom404 && page === '404.md')
-      ? appChunk
-        ? [appChunk.fileName]
-        : []
+      ? []
       : result && appChunk
-      ? [
-          ...new Set([
-            // resolve imports for index.js + page.md.js and inject script tags
-            // for them as well so we fetch everything as early as possible
-            // without having to wait for entry chunks to parse
-            ...resolvePageImports(config, page, result, appChunk),
-            pageClientJsFileName,
-            appChunk.fileName
-          ])
-        ]
-      : []
+        ? [
+            ...new Set([
+              // resolve imports for index.js + page.md.js and inject script tags
+              // for them as well so we fetch everything as early as possible
+              // without having to wait for entry chunks to parse
+              ...resolvePageImports(config, page, result, appChunk),
+              pageClientJsFileName
+            ])
+          ]
+        : []
 
   let prefetchLinks: string[] = []
 
@@ -87,44 +97,41 @@ export async function renderPage(
     preloadLinks = preloadLinks.filter((link) => shouldPreload(link, page))
   }
 
-  const preloadLinksString = preloadLinks
-    .map((file) => {
-      return `<link rel="modulepreload" href="${
-        EXTERNAL_URL_RE.test(file) ? '' : siteData.base // don't add base to external urls
-      }${file}">`
-    })
-    .join('\n    ')
+  const toHeadTags = (files: string[], rel: string): HeadConfig[] =>
+    files.map((file) => [
+      'link',
+      {
+        rel,
+        // don't add base to external urls
+        href: (EXTERNAL_URL_RE.test(file) ? '' : siteData.base) + file
+      }
+    ])
 
-  const prefetchLinkString = prefetchLinks
-    .map((file) => {
-      return `<link rel="prefetch" href="${
-        EXTERNAL_URL_RE.test(file) ? '' : siteData.base // don't add base to external urls
-      }${file}">`
-    })
-    .join('\n    ')
+  const preloadHeadTags = toHeadTags(preloadLinks, 'modulepreload')
+  const prefetchHeadTags = toHeadTags(prefetchLinks, 'prefetch')
 
-  const stylesheetLink = cssChunk
-    ? `<link rel="preload stylesheet" href="${siteData.base}${cssChunk.fileName}" as="style">`
-    : ''
-
-  const title: string = createTitle(siteData, pageData)
-  const description: string = pageData.description || siteData.description
-
-  const headBeforeTransform = mergeHead(
-    siteData.head,
-    filterOutHeadDescription(pageData.frontmatter.head)
-  )
+  const headBeforeTransform = [
+    ...additionalHeadTags,
+    ...preloadHeadTags,
+    ...prefetchHeadTags,
+    ...mergeHead(
+      siteData.head,
+      filterOutHeadDescription(pageData.frontmatter.head)
+    )
+  ]
 
   const head = mergeHead(
     headBeforeTransform,
     (await config.transformHead?.({
+      page,
       siteConfig: config,
       siteData,
       pageData,
       title,
       description,
       head: headBeforeTransform,
-      content
+      content,
+      assets
     })) || []
   )
 
@@ -134,7 +141,7 @@ export async function renderPage(
       (chunk) =>
         chunk.type === 'chunk' &&
         chunk.facadeModuleId === slash(path.join(config.srcDir, page))
-    ) as OutputChunk
+    ) as Rollup.OutputChunk
     if (matchingChunk) {
       if (!matchingChunk.code.includes('import')) {
         inlinedScript = `<script type="module">${matchingChunk.code}</script>`
@@ -145,45 +152,52 @@ export async function renderPage(
     }
   }
 
-  const html = `
-<!DOCTYPE html>
-<html lang="${siteData.lang}" dir="${siteData.dir}">
+  const dir = pageData.frontmatter.dir || siteData.dir || 'ltr'
+
+  const html = `<!DOCTYPE html>
+<html lang="${siteData.lang}" dir="${dir}">
   <head>
     <meta charset="utf-8">
-    <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>${title}</title>
-    <meta name="description" content="${description}">
+    ${
+      isMetaViewportOverridden(head)
+        ? ''
+        : '<meta name="viewport" content="width=device-width,initial-scale=1">'
+    }
+    <title>${escapeHtml(title)}</title>
+    ${
+      isDescriptionOverridden(head)
+        ? ''
+        : `<meta name="description" content="${description}">`
+    }
+    <meta name="generator" content="VitePress v${version}">
     ${stylesheetLink}
-    ${preloadLinksString}
-    ${prefetchLinkString}
+    ${metadataScript.inHead ? metadataScript.html : ''}
+    ${
+      appChunk
+        ? `<script type="module" src="${siteData.base}${appChunk.fileName}"></script>`
+        : ''
+    }
     ${await renderHead(head)}
   </head>
   <body>${teleports?.body || ''}
-    <div id="app">${content}</div>
-    ${
-      config.mpa
-        ? ''
-        : `<script>__VP_HASH_MAP__ = JSON.parse(${hashMapString})</script>`
-    }
-    ${
-      appChunk
-        ? `<script type="module" async src="${siteData.base}${appChunk.fileName}"></script>`
-        : ``
-    }
+    <div id="app">${page === '404.md' ? '' : content}</div>
+    ${metadataScript.inHead ? '' : metadataScript.html}
     ${inlinedScript}
   </body>
-</html>`.trim()
-  const htmlFileName = path.join(config.outDir, page.replace(/\.md$/, '.html'))
+</html>`
 
+  const htmlFileName = path.join(config.outDir, page.replace(/\.md$/, '.html'))
   await fs.ensureDir(path.dirname(htmlFileName))
   const transformedHtml = await config.transformHtml?.(html, htmlFileName, {
+    page,
     siteConfig: config,
     siteData,
     pageData,
     title,
     description,
     head,
-    content
+    content,
+    assets
   })
   await fs.writeFile(htmlFileName, transformedHtml || html)
 }
@@ -191,15 +205,17 @@ export async function renderPage(
 function resolvePageImports(
   config: SiteConfig,
   page: string,
-  result: RollupOutput,
-  appChunk: OutputChunk
+  result: Rollup.RollupOutput,
+  appChunk: Rollup.OutputChunk
 ) {
   page = config.rewrites.inv[page] || page
   // find the page's js chunk and inject script tags for its imports so that
   // they start fetching as early as possible
   let srcPath = path.resolve(config.srcDir, page)
   try {
-    srcPath = fs.realpathSync(srcPath)
+    if (!config.vite?.resolve?.preserveSymlinks) {
+      srcPath = fs.realpathSync(srcPath)
+    }
   } catch (e) {
     // if the page is a virtual page generated by a dynamic route this would
     // fail, which is expected
@@ -207,7 +223,7 @@ function resolvePageImports(
   srcPath = normalizePath(srcPath)
   const pageChunk = result.output.find(
     (chunk) => chunk.type === 'chunk' && chunk.facadeModuleId === srcPath
-  ) as OutputChunk
+  ) as Rollup.OutputChunk
   return [
     ...appChunk.imports,
     ...appChunk.dynamicImports,
@@ -216,8 +232,8 @@ function resolvePageImports(
   ]
 }
 
-function renderHead(head: HeadConfig[]): Promise<string> {
-  return Promise.all(
+async function renderHead(head: HeadConfig[]): Promise<string> {
+  const tags = await Promise.all(
     head.map(async ([tag, attrs = {}, innerHTML = '']) => {
       const openTag = `<${tag}${renderAttrs(attrs)}>`
       if (tag !== 'link' && tag !== 'meta') {
@@ -236,22 +252,33 @@ function renderHead(head: HeadConfig[]): Promise<string> {
         return openTag
       }
     })
-  ).then((tags) => tags.join('\n  '))
+  )
+  return tags.join('\n    ')
 }
 
 function renderAttrs(attrs: Record<string, string>): string {
   return Object.keys(attrs)
     .map((key) => {
-      return ` ${key}="${escape(attrs[key])}"`
+      if (isBooleanAttr(key)) return ` ${key}`
+      return ` ${key}="${escapeHtml(attrs[key] as string)}"`
     })
     .join('')
 }
 
-function isMetaDescription(headConfig: HeadConfig) {
-  const [type, attrs] = headConfig
-  return type === 'meta' && attrs?.name === 'description'
+function filterOutHeadDescription(head: HeadConfig[] = []) {
+  return head.filter(([type, attrs]) => {
+    return !(type === 'meta' && attrs?.name === 'description')
+  })
 }
 
-function filterOutHeadDescription(head: HeadConfig[] | undefined) {
-  return head ? head.filter((h) => !isMetaDescription(h)) : []
+function isDescriptionOverridden(head: HeadConfig[] = []) {
+  return head.some(([type, attrs]) => {
+    return type === 'meta' && attrs?.name === 'description'
+  })
+}
+
+function isMetaViewportOverridden(head: HeadConfig[] = []) {
+  return head.some(([type, attrs]) => {
+    return type === 'meta' && attrs?.name === 'viewport'
+  })
 }

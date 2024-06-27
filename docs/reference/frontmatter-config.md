@@ -25,7 +25,7 @@ You can access frontmatter data via the `$frontmatter` global in Vue expressions
 
 - Type: `string`
 
-Title for the page. It's same as [config.title](/reference/site-config#title), and it overrides the site-level config.
+Title for the page. It's same as [config.title](./site-config#title), and it overrides the site-level config.
 
 ```yaml
 ---
@@ -37,7 +37,7 @@ title: VitePress
 
 - Type: `string | boolean`
 
-The suffix for the title. It's same as [config.titleTemplate](/reference/site-config#titletemplate), and it overrides the site-level config.
+The suffix for the title. It's same as [config.titleTemplate](./site-config#titletemplate), and it overrides the site-level config.
 
 ```yaml
 ---
@@ -50,7 +50,7 @@ titleTemplate: Vite & Vue powered static site generator
 
 - Type: `string`
 
-Description for the page. It's same as [config.description](/reference/site-config#description), and it overrides the site-level config.
+Description for the page. It's same as [config.description](./site-config#description), and it overrides the site-level config.
 
 ```yaml
 ---
@@ -86,7 +86,7 @@ type HeadConfig =
 
 The following frontmatter options are only applicable when using the default theme.
 
-### layout <Badge type="info" text="default theme only" />
+### layout
 
 - Type: `doc | home | page`
 - Default: `doc`
@@ -103,20 +103,50 @@ layout: doc
 ---
 ```
 
-### hero <Badge type="info" text="default theme only" /> <Badge type="info" text="Home page only" />
+### hero <Badge type="info" text="home page only" />
 
-Defines contents of home hero section when `layout` is set to `home`. More details in [Default Theme: Home Page](/reference/default-theme-home-page).
+Defines contents of home hero section when `layout` is set to `home`. More details in [Default Theme: Home Page](./default-theme-home-page).
 
-### features <Badge type="info" text="default theme only" /> <Badge type="info" text="Home page only" />
+### features <Badge type="info" text="home page only" />
 
-Defines items to display in features section when `layout` is set to `home`. More details in [Default Theme: Home Page](/reference/default-theme-home-page).
+Defines items to display in features section when `layout` is set to `home`. More details in [Default Theme: Home Page](./default-theme-home-page).
 
-### aside <Badge type="info" text="default theme only" />
+### navbar
 
 - Type: `boolean`
 - Default: `true`
 
-If you want the right aside component in `doc` layout not to be shown, set this option to `false`.
+Whether to display [navbar](./default-theme-nav).
+
+```yaml
+---
+navbar: false
+---
+```
+
+### sidebar
+
+- Type: `boolean`
+- Default: `true`
+
+Whether to display [sidebar](./default-theme-sidebar).
+
+```yaml
+---
+sidebar: false
+---
+```
+
+### aside
+
+- Type: `boolean | 'left'`
+- Default: `true`
+
+Defines the location of the aside component in the `doc` layout.
+
+Setting this value to `false` prevents rendering of aside container.\
+Setting this value to `true` renders the aside to the right.\
+Setting this value to `'left'` renders the aside to the left.
 
 ```yaml
 ---
@@ -124,22 +154,68 @@ aside: false
 ---
 ```
 
-### outline <Badge type="info" text="default theme only" />
+### outline
 
 - Type: `number | [number, number] | 'deep' | false`
 - Default: `2`
 
-The levels of header in the outline to display for the page. It's same as [config.themeConfig.outline](/reference/default-theme-config#outline), and it overrides the theme config.
+The levels of header in the outline to display for the page. It's same as [config.themeConfig.outline.level](./default-theme-config#outline), and it overrides the value set in site-level config.
 
-### lastUpdated <Badge type="info" text="default theme only" />
+### lastUpdated
 
-- Type: `boolean`
+- Type: `boolean | Date`
 - Default: `true`
 
-Whether to display [Last Updated](/reference/default-theme-last-updated) text in the current page.
+Whether to display [last updated](./default-theme-last-updated) text in the footer of the current page. If a datetime is specified, it will be displayed instead of the last git modified timestamp.
 
 ```yaml
 ---
 lastUpdated: false
 ---
+```
+
+### editLink
+
+- Type: `boolean`
+- Default: `true`
+
+Whether to display [edit link](./default-theme-edit-link) in the footer of the current page.
+
+```yaml
+---
+editLink: false
+---
+```
+
+### footer
+
+- Type: `boolean`
+- Default: `true`
+
+Whether to display [footer](./default-theme-footer).
+
+```yaml
+---
+footer: false
+---
+```
+
+### pageClass
+
+- Type: `string`
+
+Add extra class name to a specific page.
+
+```yaml
+---
+pageClass: custom-page-class
+---
+```
+
+Then you can customize styles of this specific page in `.vitepress/theme/custom.css` file:
+
+```css
+.custom-page-class {
+  /* page-specific styles */
+}
 ```

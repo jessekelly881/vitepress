@@ -23,7 +23,7 @@ It also provides documentation specific features listed below. These features ar
 
 ## Page Layout
 
-Option `page` is treated as "blank page". The Markdown will still be parsed, and all of the [Markdown Extensions](/guide/markdown) work as same as `doc` layout, but it wouldn't get any default stylings.
+Option `page` is treated as "blank page". The Markdown will still be parsed, and all of the [Markdown Extensions](../guide/markdown) work as same as `doc` layout, but it wouldn't get any default stylings.
 
 The page layout will let you style everything by you without VitePress theme affecting the markup. This is useful when you want to create your own custom page.
 
@@ -31,8 +31,32 @@ Note that even in this layout, sidebar will still show up if the page has a matc
 
 ## Home Layout
 
-Option `home` will generate templated "Homepage". In this layout, you can set extra options such as `hero` and `features` to customize the content further. Please visit [Default Theme: Home Page](/reference/default-theme-home-page) for more details.
+Option `home` will generate templated "Homepage". In this layout, you can set extra options such as `hero` and `features` to customize the content further. Please visit [Default Theme: Home Page](./default-theme-home-page) for more details.
 
 ## No Layout
 
 If you don't want any layout, you can pass `layout: false` through frontmatter. This option is helpful if you want a fully-customizable landing page (without any sidebar, navbar, or footer by default).
+
+## Custom Layout
+
+You can also use a custom layout:
+
+```md
+---
+layout: foo
+---
+```
+
+This will look for a component named `foo` registered in context. For example, you can register your component globally in `.vitepress/theme/index.ts`:
+
+```ts
+import DefaultTheme from 'vitepress/theme'
+import Foo from './Foo.vue'
+
+export default {
+  extends: DefaultTheme,
+  enhanceApp({ app }) {
+    app.component('foo', Foo)
+  }
+}
+```
